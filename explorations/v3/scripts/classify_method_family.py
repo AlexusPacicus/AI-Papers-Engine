@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 from typing import Dict, List, Tuple
@@ -141,12 +142,21 @@ def count_keyword_hits(text: str) -> Tuple[Dict[str, int], Dict[str, List[str]]]
     matched: Dict[str, List[str]] = {}
 
     for family, keywords in KEYWORDS.items():
-        family_matches: List[str] = []
-        for keyword in keywords:
-            if keyword in lowered:
-                family_matches.append(keyword)
-        counts[family] = len(family_matches)
-        matched[family] = family_matches
+        matched[family] = [
+            keyword
+            for keyword in keywords
+            if re.search(rf"(?<![a-z0-9]){re.escape(keyword)}(?![a-z0-9])", lowered)
+        ]
+
+    # Una clave contenida en otra más larga de otra familia no cuenta (p. ej. `diffusion` dentro de `diffusion transformer`).
+    all_hits = [keyword for hits in matched.values() for keyword in hits]
+    for family, hits in matched.items():
+        matched[family] = [
+            keyword
+            for keyword in hits
+            if not any(keyword != other and keyword in other and other not in hits for other in all_hits)
+        ]
+        counts[family] = len(matched[family])
 
     return counts, matched
 
